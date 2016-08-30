@@ -1,0 +1,225 @@
+#!/bin/bash
+# Version: 0.6
+
+### Funzioni ###
+
+function printhelp {
+	echo "Utilizzo: $0 --operazione pacchetto o lista pacchetti"
+	echo "Operazioni:"
+	echo "--cerca: ricerca pacchetti"
+	echo "--cercainstallato: ricerca nell'elenco pacchetti installati il pacchetto"
+	echo "--installa: installa pacchetti"
+	echo "--rimuovi: rimuovi elenco pacchetti"
+	echo "--rimuoviorfani: rimuove i pacchetti orfani"
+	echo "--aggiorna: aggiorna il sistema"
+	echo "--aggiornatutto: forza aggiornamento di tutto il sistema"
+	echo "--info: informazioni sul pacchetto"
+	echo ""
+	echo "$0 --help: mostra questo messaggio"
+	exit 0
+}
+
+function controllaoperazione {
+	if [ "$operazione" == "--cerca" ] ; then cerca
+	elif [ "$operazione" == "--cercainstallato" ]; then cercainstallato
+	elif [ "$operazione" == "--installa" ]; then installa
+	elif [ "$operazione" == "--rimuovi" ]; then rimuovi
+	elif [ "$operazione" == "--rimuoviorfani" ]; then rimuoviorfani
+	elif [ "$operazione" == "--aggiorna" ]; then aggiorna
+	elif [ "$operazione" == "--aggiornatutto" ]; then aggiornatutto
+	elif [ "$operazione" == "--help" ]; then printhelp
+	elif [ "$operazione" == "--info" ]; then info
+	else 
+		echo "Operazione sconosciuta"
+		exit 2
+	fi
+	exit 0
+}
+
+function cerca {
+	echo "Ricerca $pacchetti"
+	if [ $mylinux -eq 1 ]; then
+		apt-cache search $pacchetti
+	elif [ $mylinux -eq 2 ]; then
+		yum search $pacchetti
+	elif [ $mylinux -eq 3 ]; then
+		if [ $usepacman -eq 1 ]; then
+			pacman -Ss $pacchetti
+		else
+			yaourt -Ss $pacchetti
+		fi
+	fi
+}
+
+function installa {
+	if [ $mylinux -eq 1 ]; then
+		apt-get install $pacchetti
+	elif [ $mylinux -eq 2]; then
+		yum install $pacchetti
+	elif [ $mylinux -eq 3]; then
+		if [ $usepacman -eq 1 ]; then
+			pacman -Syu $pacchetti
+		else
+			yaourt -Sy $pacchetti
+		fi
+	fi
+}
+
+function rimuovi {
+	if [ $mylinux -eq 1 ]; then
+		apt-get remove $ispurge $pacchetti
+	elif [ $mylinux -eq 2 ]; then
+		yum remove $pacchetti
+	elif [ $mylinux -eq 3 ]; then
+		if [ $usepacman -eq 1 ]; then
+			pacman -Rns $pacchetti
+		else
+			yaourt -Rns $pacchetti
+		fi
+	fi
+}
+
+function rimuoviorfani {
+	if [ $mylinux -eq 1 ]; then
+		apt-get autoremove $ispurge
+	elif [ $mylinux -eq 2]; then
+		yum autoremove
+	elif [ $mylinux -eq 3]; then
+		if [ $usepacman -eq 1]; then
+			pacman -Rns $(pacman -Qdtq)
+		else
+			# uso sempre e comunque pacman per la rimozione dei pacchetti orfani
+			pacman -Rns $(pacman -Qdtq)
+		fi
+	fi
+}
+
+function cercainstallato {
+	if [ $mylinux -eq 1]; then
+		dpkg --get-selections | egrep -i $pacchetti
+	elif [ $mylinux -eq 2]; then
+		yum list installed | egrep -i $pacchetti
+	elif [ $mylinux -eq 3]; then
+		pacman -Qqen | egrep -i $pacchetti
+	fi
+}
+
+function info {
+	if [ $mylinux -eq 1 ]; then
+		apt-cache show $pacchetti
+	elif [ $mylinux -eq 2]; then
+		yum info $pacchetti
+	elif [ $mylinux -eq 3]; then
+		if [ $usepacman -eq 1]; then
+			pacman -Si $pacchetti
+		else
+			yaourt -Si $pacchetti
+		fi
+	fi
+}
+
+function aggiorna {
+	if [ $mylinux -eq 1 ]; then
+		apt-get update && apt-get upgrade
+	elif [ $mylinux -eq 2]; then
+		yum update
+	elif [ $mylinux -eq 3]; then
+		if [ $usepacman -eq 1]; then
+			pacman -Syu
+		else
+			yaourt -Syu
+		fi
+	fi
+}
+
+function aggiornatutto {
+	if [ $mylinux -eq 1 ]; then
+		apt-get update && apt-get dist-upgrade
+	elif [ $mylinux -eq 2]; then
+		yum upgrade
+	elif [ $mylinux -eq 3]; then
+		if [ $usepacman -eq 1]; then
+			pacman -Syu
+		else
+			yaourt -Syu --aur
+		fi
+	fi
+}
+
+function ottienilinux {
+	if [ -f /usr/bin/apt-get ]
+	then
+		echo "Trovato apt-get"
+		mylinux=1
+	elif [ -f /usr/bin/pacman ]
+	then
+		mylinux=3
+		echo "Trovato pacman"
+		if [ $usepacman -eq 0 ]
+		then
+			if [ ! -f /usr/bin/yaourt ]
+			then
+				echo "Yaourt non trovato. Imposto pacman come default."
+				usepacman=1
+			else
+				echo "Trovato yaourt"
+			fi
+		fi
+	elif [ -f /usr/bin/yum ]
+	then
+		echo "Trovato yum"
+		mylinux=2
+	else
+		mylinux=0
+		echo "Distribuzione sconosciuta."
+		exit 1
+	fi
+}
+
+# DEBIAN / UBUNTU
+# Per disabilitare il purge impostare ispurge a ""
+ispurge="--purge"
+
+# ARCH / MANJARO
+# Per abilitare pacman usepacman=1 per yaourt usepacman=0
+usepacman=1
+
+# 0 Sconosciuta - default esci con warning
+# 1 debian/ubuntu - apt
+# 2 oracle/rhel/fedora/centos - yum
+# 3 arch/manjaro  - pacman
+mylinux=0
+
+# cerca - default
+# installa
+# rimuovi
+# rimuoviorfani
+# cercainstallato
+# info
+operazione="--cerca"
+# leggi i parametri di input
+if [ $# -eq 0 ]
+then
+	printhelp
+elif [ $# -eq 1 ]
+	then
+		if [ "$1" == "--help" ]
+		then
+			printhelp
+		elif [ "$1" == "--*" ]
+		then
+			operazione=$1
+		else
+			pacchetti=$1
+		fi
+else
+	operazione=$1
+	pacchetti=${@:2}
+fi
+
+# ottieni sistema
+ottienilinux
+controllaoperazione
+# esci
+exit 0
+
